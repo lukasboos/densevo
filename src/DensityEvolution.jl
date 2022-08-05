@@ -29,11 +29,14 @@ cdf(x, σ, μ) = 1 / 2 * (1 + erf((x - μ) / (σ * sqrt(2))))
 LLR(σ, μ) = log((1 - cdf(0, σ, μ)) / cdf(0, σ, μ))
 
 
-function box_plus(a::AbstractFloat, b::AbstractFloat)
-    dividend = 1 + exp(a + b)
-    divisor = exp(a) + exp(b)
-
-    return log(dividend / divisor)
+function box_plus(a::Vector)
+    result = 0.0
+    for i in 1:length(a)-1
+        dividend = 1 + exp(a[i] + a[i+1])
+        divisor = exp(a[i]) + exp(a[i+1])
+        result = log(dividend / divisor)
+    end
+    return result
 end
 
 
@@ -129,27 +132,27 @@ n = 2000
 # Plot range
 x = -10:0.01:35
 
-# Sample vector LLRs
+# Sample vector LLRs per check node since every check node contains same LLRs a vector is sufficient. Otherwise we need one per cn
 LLRs = Vector{Float64}(undef, n)
-
+# Extrinsic LLRs per check node since every check node contains same LLRs a vector is sufficient. Otherwise we need one per cn
 LLR_ext_cn = Vector{Float64}(undef, n)
 
 ############################################################################################
 # Sample Normal distribution
 ############################################################################################
 
-# Calculate step size
-step = (last(x)-x[1])/n
-
-# Calculate sample Values
-function sample()
+# Calculate sample Values for each check node
+function sample(x)
+    # Calculate step size
+    steps = (last(x)-x[1])/n
     x_n = x[1]
     for i in 1:n
         LLRs[i] = f(x_n, σ, μ)
-        x_n += step
+        x_n += steps
     end
+    return LLRs
 end
-sample()
+sample(x)
 
 ############################################################################################
 # Calculate check node LLRs by boxplus operation
@@ -157,13 +160,13 @@ sample()
 # init
 LLR_ext_cn[1] = LLRs[1]
 
-# calculate LLR_ext_cn
-for i in 2:n
-    for j in 2:n
-        if j==i
+# calculate LLR_ext_cn for d_c checknodes
+for edge_out in 1:d_c
+    for edge_in in 1:d_c
+        if edge_out==edge_in
             continue
         else
-            LLR_ext_cn[i] = box_plus(LLR_ext_cn[i], LLRs[i])
+            LLR_ext_cn[edge_out] = box_plus(LLRs) * d_c-1
         end
     end
 end 
@@ -177,7 +180,7 @@ function prob()
     LLR_cn_sum = 0.0
     p_cn = 0.0
     # LLR sum for 1
-    for i in 1000:2000
+    for i in 1001:2000
         LLR_cn_1 = LLRs[i] + LLR_cn_1
     end
     # LLRs sum total

@@ -132,6 +132,8 @@ x = -10:0.01:35
 # Sample vector LLRs
 LLRs = Vector{Float64}(undef, n)
 
+LLR_ext_cn = Vector{Float64}(undef, n)
+
 ############################################################################################
 # Sample Normal distribution
 ############################################################################################
@@ -161,10 +163,27 @@ for i in 2:n
         if j==i
             continue
         else
-            LLR_ext_cn[i] = box_plus(LLR_cn[i], LLRs[i])
+            LLR_ext_cn[i] = box_plus(LLR_ext_cn[i], LLRs[i])
         end
+    end
 end 
 
+############################################################################################
+# Calculate probability distribution
+############################################################################################
+function todistribution()
+    # LLR sum for 1
+    for i in n/2:n
+        LLR_ext_cn_1 += LLR_ext_cn[i]
+    end
+    # LLRs sum total
+    for i in 1:n
+        LLR_ext_cn_sum += LLR_ext_cn[i]
+    end
+    # calculate probability distribution
+    p_cn = LLR_ext_cn_0/LLR_ext_cn_sum
+end
+todistribution()
 
 ############################################################################################
 # Show initial results

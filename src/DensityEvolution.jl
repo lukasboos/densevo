@@ -172,22 +172,23 @@ end
 # Calculate probability distribution
 ############################################################################################
 
-function todistribution()
+function prob()
     LLR_cn_1 = 0.0
     LLR_cn_sum = 0.0
     p_cn = 0.0
     # LLR sum for 1
-    for i in n/2:n
-        LLR_cn_1 += LLRs[i]
+    for i in 1000:2000
+        LLR_cn_1 = LLRs[i] + LLR_cn_1
     end
     # LLRs sum total
-    for i in 1:n
-        LLR_cn_sum += LLR_ext_cn[i]
+    for i in 1:2000
+        LLR_cn_sum = LLR_ext_cn[i] + LLR_cn_sum
     end
     # calculate probability distribution
-    p_cn = LLR_cn_0/LLR_cn_sum
+    p_cn = LLR_cn_1/LLR_cn_sum
+    @show p_cn
 end
-todistribution()
+prob()
 
 ############################################################################################
 # Show initial results

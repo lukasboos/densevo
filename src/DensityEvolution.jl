@@ -153,7 +153,7 @@ sample()
 # Calculate check node LLRs by boxplus operation
 ############################################################################################
 # init
-LLR_ext_cn[1] = LLRs[i]
+LLR_ext_cn[1] = LLRs[1]
 
 # calculate LLR_ext_cn
 for i in 2:n

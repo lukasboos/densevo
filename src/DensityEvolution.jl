@@ -1,125 +1,237 @@
 using SpecialFunctions
 using Plots
 
-#-----------------variables--------------------------
+struct Gaussian
+    μ::AbstractFloat
+    σ::AbstractFloat
+end
 
-#number of iterations
-n = 1
+############################################################################################
+# Functions
+############################################################################################
+# Code Rate
+R(d_v, d_c) = 1 - d_v / d_c
 
+# SNR from exponential to linear space
+db_to_lin(x) = (10^(x / 10))
+
+# See Example 2.3.4.2
+σ_ñ(eb_n0_lin, R) = 1 / sqrt(2 * eb_n0_lin * R)
+
+# Gaussian Distribution (Normal Distribution)
+f(x, σ, μ) = 1 / (σ * sqrt(2 * pi)) * exp(-1 / 2 * ((x - μ) / σ)^2)
+
+# Cumulative density function
+# Siehe https://en.wikipedia.org/wiki/Normal_distribution
+cdf(x, σ, μ) = 1 / 2 * (1 + erf((x - μ) / (σ * sqrt(2))))
+
+# Equation (2.50)
+LLR(σ, μ) = log((1 - cdf(0, σ, μ)) / cdf(0, σ, μ))
+
+
+function box_plus(a::AbstractFloat, b::AbstractFloat)
+    dividend = 1 + exp(a + b)
+    divisor = exp(a) + exp(b)
+
+    return log(dividend / divisor)
+end
+
+
+function Base.:*(
+    a::Gaussian,
+    b::Gaussian
+)::Gaussian
+    dividend = a.μ * b.σ^2 + b.μ * a.σ^2
+    divisor = b.σ^2 + a.σ^2
+    μ = dividend / divisor
+
+    dividend = a.σ^2 * b.σ^2
+    divisor = a.σ^2 + b.σ^2
+    σ = sqrt(dividend / divisor)
+
+    return Gaussian(μ, σ)
+end
+
+function convolution(
+    a::Gaussian,
+    b::Gaussian
+)::Gaussian
+    μ = a.μ + b.μ
+    σ = sqrt(a.σ^2 + b.σ^2)
+
+    return Gaussian(μ, σ)
+end
+
+function Base.:+(
+    a::Gaussian,
+    b::Gaussian
+)
+    μ = a.μ + b.μ
+    σ = sqrt(a.σ^2 + b.σ^2)
+
+    return Gaussian(μ, σ)
+end
+
+function Base.:/(
+    a::Gaussian,
+    b::Real
+)
+    return Gaussian(a.μ / b, a.σ / b)
+end
+
+function Base.:*(
+    a::Gaussian,
+    b::Real
+)
+    return Gaussian(a.μ * b, a.σ * b)
+end
+
+function Base.:*(
+    a::Real,
+    b::Gaussian
+)
+    return b * a
+end
+
+
+############################################################################################
+# Configuration parameters
+############################################################################################
 d_v = 3
-
 d_c = 6
-
-x = -10:0.01:35 #-10.0:0.01:35.0
-
 eb_n0 = 1.12
 
-R(d_v, d_c) = 1 - d_v / d_c # Code Rate
 
+# Code rate
 r = R(d_v, d_c)
 
-db_to_lin(x) = (10^(x/10)) # SNR from exponential to linear space
+# Lineariation of SNR in dB range
+eb_n0_lin = db_to_lin(eb_n0)
 
-eb_n0_lin = db_to_lin(eb_n0) #1.2941958414499861
+# variance
+variance = σ_ñ(eb_n0_lin, r)
 
-σ_ñ(eb_n0_lin, R) = 1/sqrt(2 * eb_n0_lin * R) # See Example 2.3.4.2
+# mean value
+μ = 2 / (variance^2)
 
-variance = σ_ñ(eb_n0_lin, r) #0.8790225168308843
-
-μ = 2/(variance^2) #2.5883916828999722
-
-σ = sqrt(4 / (variance^2)) #2.2752545716468617
-
-# bits connected to considered check node (Annahme null codeword)
-b = [0, 0, 0, 0, 0, 0]
-
-#LLRs of b
-LLR_b = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-#extrinsic LLRs for cn
-LLR_ext_bn = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-#probability distribution of cn
-p_L_μ = [0.0, 0.0, 0.0, 0.0]
-p_L_σ = [0.0, 0.0, 0.0, 0.0]
-
-#probability distribution from cn to vn after i-th iteration
-p_L_c_v_μ = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-p_L_c_v_σ = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-#probability distribution of vn
-p_L_dv_ext_μ = [0.0, 0.0, 0.0, 0.0]
-p_L_dv_ext_σ = [0.0, 0.0, 0.0, 0.0]
-
-#probability distribution from vn to cn after i-th iteration
-p_L_v_c_μ = [0.0, 0.0, 0.0, 0.0]
-p_L_v_c_σ = [0.0, 0.0, 0.0, 0.0]
+# sigma
+σ = sqrt(4 / (variance^2))
 
 
-#-----------------functions--------------------------
+λ_d_v = zeros(Float64, d_v)
+λ_d_v[d_v] = 1.0
+λ_d_c = zeros(Float64, d_c)
+λ_d_c[d_c] = 1.0
 
-#p(L(0)vc)is identical to p(L(ch)vc) in initial decoding iteration
-# also p_vc_init ist gleich der Normalverteilung
-#p_vc_init(x,σ,μ) = 1 / (σ * sqrt(2 * pi)) * exp(-1/2 * ((x - μ) / σ)^2)
-cdf(x, σ, μ) = 1/2 * (1 + erf((x - μ) / (σ * sqrt(2)))) # Siehe https://en.wikipedia.org/wiki/Normal_distribution
-f(x, σ, μ) = 1 / (σ * sqrt(2 * pi)) * exp(-1/2 * ((x - μ) / σ)^2) # Gaussian Distribution (Normal Distribution)
-LLR(σ, μ) = log((1-cdf(0, σ, μ))/cdf(0, σ, μ)) # Equation (2.50)
+# Number of samples
+n = 2000
 
-#Calculate Check node LLR by box-sum operation, see equation 2.51 & 2.52-------------------------------------
+# Plot range
+x = -10:0.01:35
 
-#LLRs_b sind in unserem Fall gleich LLR_ch
-for j=1:length(b)
-    LLR_b[j] = LLR(σ, μ)
-    LLR_ext_bn[j] = LLR(σ, μ)
-end
-@show LLR_b
+# Sample vector LLRs
+LLRs = Vector{Float64}(undef, n)
 
-#Calculate LLR_ext_bn
-for i=1:length(b)
-    for j=1:length(b)
-        if j==i
-            continue
-        else
-            LLR_ext_bn[i]=log((1+exp(LLR_ext_bn[i]+LLR_b[j]))/(exp(LLR_ext_bn[i])+exp(LLR_b[j])))
-        end
+############################################################################################
+# Sample Normal distribution
+############################################################################################
+
+# Calculate step size
+step = (last(x)-x[1])/n
+
+# Calculate sample Values
+function sample()
+    x_n = x[1]
+    for i in 1:n
+        LLRs[i] = f(x_n, σ, μ)
+        x_n += step
     end
 end
-@show LLR_ext_bn
+sample()
 
-#Calculate probability disribution of check node, see equation 2.59 (initial) & 2.60 & 2.61-------------------
-#Fuer jeden checknode berechnen; Extrinsic beachten!
+############################################################################################
+# Calculate check node LLRs by boxplus operation
+############################################################################################
 
-#initial see equation 2.59 (see equation on: https://ccrma.stanford.edu/~jos/sasp/Product_Two_Gaussian_PDFs.html)
-p_L_μ[1]=(LLR_ext_bn[1]*σ^2+LLR_ext_bn[2]*σ^2)/(2*σ^2)
-@show p_L_μ[1]
-p_L_σ[1]=sqrt((σ^4)/2*σ^2)
-@show p_L_σ[1]
 
-#see equation 2.60 (see equation on: https://ccrma.stanford.edu/~jos/sasp/Product_Two_Gaussian_PDFs.html)
-for i=2:4
-    p_L_μ[i]=(p_L_μ[1]*σ^2+LLR_ext_bn[i+1]*σ^2)/(2*σ^2)
-    p_L_σ[i]=sqrt((σ^4)/2*σ^2)
+
+############################################################################################
+# Show initial results
+############################################################################################
+# LLR value for normal distribution
+@show LLR(σ, μ)
+
+# Plot function (divided by 6 for normalization)
+y(x) = f(x, σ, μ) / d_c
+
+plot(x, y)
+
+
+
+
+############################################################################################
+# First Iteration check node
+############################################################################################
+function de_cn(λ_d_c::Vector{Float64}, p_L_vn_cn::Gaussian)::Gaussian
+    d_c = length(λ_d_c)
+
+    p_L = Vector{Gaussian}(undef, d_c - 2)
+    # p_L[0+1] = (p_L_vn_cn / (d_c - 1)) * (p_L_vn_cn / (d_c - 1))
+    p_L[0+1] = p_L_vn_cn * p_L_vn_cn
+    for i in 1:d_c-3
+        # p_L[i+1] = p_L[i-1+1] * (p_L_vn_cn / (d_c - 1))
+        p_L[i+1] = p_L[i-1+1] * p_L_vn_cn
+    end
+
+    p_L_cn_vn = λ_d_c[3] * p_L[1]
+    for i in 4:d_c
+        p_L_cn_vn += λ_d_c[i] * p_L[i-3+1]
+    end
+
+    return p_L_cn_vn
 end
 
-#see equation 2.60 (see equation on: https://ccrma.stanford.edu/~jos/sasp/Product_Two_Gaussian_PDFs.html)
-p_L_c_v_μ[n]=(1/d_c)*(p_L_μ[1]+p_L_μ[2]+p_L_μ[3]+p_L_μ[4])
-@show p_L_c_v_μ[1]
-p_L_c_v_σ[n]=(1/d_c)*(p_L_σ[1]+p_L_σ[2]+p_L_σ[3]+p_L_σ[4])
-@show p_L_c_v_σ[1]
+############################################################################################
+# First Iteration variable node
+############################################################################################
+function de_vn(λ_d_v::Vector{Float64}, p_L_chv::Gaussian, p_L_cn_vn::Gaussian)::Gaussian
+    d_v = length(λ_d_v)
 
-#Calculate probability distribution of variable node, see equation 2.62--------------------------------
-#Faltung bei Normalverteilung addiert sigma & my
-p_L_dv_ext_μ[1]=p_L_μ[2]+p_L_μ[3]+p_L_μ[4]
-p_L_dv_ext_σ[1]=p_L_σ[2]+p_L_σ[3]+p_L_σ[4]
-p_L_dv_ext_μ[2]=p_L_μ[1]+p_L_μ[3]+p_L_μ[4]
-p_L_dv_ext_σ[2]=p_L_σ[1]+p_L_σ[3]+p_L_σ[4]
-p_L_dv_ext_μ[3]=p_L_μ[1]+p_L_μ[2]+p_L_μ[4]
-p_L_dv_ext_σ[3]=p_L_σ[1]+p_L_σ[2]+p_L_σ[4]
-p_L_dv_ext_μ[4]=p_L_μ[1]+p_L_μ[2]+p_L_μ[3]
-p_L_dv_ext_σ[4]=p_L_σ[1]+p_L_σ[2]+p_L_σ[3]
+    p_L_ext = Vector{Gaussian}(undef, d_v)
+    # p_L_ext[1] = p_L_chv / d_v
+    p_L_ext[1] = p_L_chv
+    for i in 0:d_v-2
+        # p_L_ext[i+2] = convolution(p_L_ext[i+1], p_L_cn_vn / d_v)
+        p_L_ext[i+2] = convolution(p_L_ext[i+1], p_L_cn_vn)
+    end
 
-#see equation 2.63
-p_L_v_c_μ[n]=(1/d_v)*(p_L_dv_ext_μ[1]+p_L_dv_ext_μ[2]+p_L_dv_ext_μ[3])
-p_L_v_c_σ[n]=(1/d_v)*(p_L_dv_ext_σ[1]+p_L_dv_ext_σ[2]+p_L_dv_ext_σ[3])
-@show p_L_v_c_μ[n]
-@show p_L_v_c_σ[n]
+    p_L_vn_cn = λ_d_v[1] * p_L_ext[1]
+    for i in 2:d_v
+        p_L_vn_cn += λ_d_v[i] * p_L_ext[i]
+    end
+
+    return p_L_vn_cn
+end
+
+
+############################################################################################
+# Density Evolution
+############################################################################################
+function de(λ_d_c::Vector{Float64}, λ_d_v::Vector{Float64}, μ::AbstractFloat, σ::AbstractFloat)
+    # Before first checknode
+    p_L_chv = Gaussian(μ, σ)
+    @show p_L_chv
+    vn_cn = Gaussian(μ, σ)
+    @show vn_cn
+
+    for i in 1:2
+        cn_vn = de_cn(λ_d_c, vn_cn)
+        @show i, cn_vn
+        vn_cn = de_vn(λ_d_v, p_L_chv, cn_vn)
+        @show i, vn_cn
+    end
+
+    return vn_cn
+end
+
+de(λ_d_c, λ_d_v, μ, σ)

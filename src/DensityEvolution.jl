@@ -29,13 +29,14 @@ cdf(x, σ, μ) = 1 / 2 * (1 + erf((x - μ) / (σ * sqrt(2))))
 LLR(σ, μ) = log((1 - cdf(0, σ, μ)) / cdf(0, σ, μ))
 
 
-function box_plus(a::Vector)
-    result = 0.0
-    for i in 1:length(a)-1
-        dividend = 1 + exp(a[i] + a[i+1])
-        divisor = exp(a[i]) + exp(a[i+1])
-        result = log(dividend / divisor)
+function box_plus(a::Vector, b::Vector, n)
+    result = Vector{Float64}(undef, n)
+    for i in 1:n
+        dividend = 1 + exp(a[i] + b[i])
+        divisor = exp(a[i]) + exp(b[i])
+        result[i] = log(dividend / divisor)
     end
+    @show length(result)
     return result
 end
 
@@ -133,48 +134,63 @@ n = 2000
 x = -10:0.01:35
 
 # Sample vector LLRs per check node since every check node contains same LLRs a vector is sufficient. Otherwise we need one per cn
-LLRs = Vector{Float64}(undef, n)
+samples = ones(Float64, n) #Vector{Float64}(undef, n)
 # Extrinsic LLRs per check node since every check node contains same LLRs a vector is sufficient. Otherwise we need one per cn
-LLR_ext_cn = Vector{Float64}(undef, n)
+LLR_ext_cn = ones(Float64, n, d_c)#Matrix{Float64}(undef, n, d_c)
 
 ############################################################################################
 # Sample Normal distribution
 ############################################################################################
 
 # Calculate sample Values for each check node
-function sample(x)
+function sample(x, n, σ, μ)
     # Calculate step size
     steps = (last(x)-x[1])/n
     x_n = x[1]
     for i in 1:n
-        LLRs[i] = f(x_n, σ, μ)
+        samples[i] = f(x_n, σ, μ)
         x_n += steps
     end
-    return LLRs
+    return samples
 end
-sample(x)
+samples = sample(x, n, σ, μ)
+@show length(samples)
+
+# TODO: plot function of samples
+# Plot function (divided by 6 for normalization
+y = samples ./ d_c
+
+plot(x, y)
+
 
 ############################################################################################
 # Calculate check node LLRs by boxplus operation
 ############################################################################################
 # init
-LLR_ext_cn[1] = LLRs[1]
+#LLR_ext_cn[1] = samples[1]
 
 # calculate LLR_ext_cn for d_c checknodes
-for edge_out in 1:d_c
-    for edge_in in 1:d_c
-        if edge_out==edge_in
-            continue
-        else
-            LLR_ext_cn[edge_out] = box_plus(LLRs) * d_c-1
+function cn_init(d_c, a::Vector, n)
+    result = Matrix{Float64}(undef, n, d_c)
+    for edge_out in 1:d_c
+        #init
+        result[:, edge_out] = box_plus(a, a, n)
+        for edge_in in 1:d_c-1
+            if edge_out==edge_in
+                continue
+            else
+                result[:, edge_out] = box_plus(a, result[:, edge_out], n)# .* (d_c-1)
+            end
         end
-    end
+    end 
+    return result
 end 
+LLR_ext_cn = cn_init(d_c, samples, n)
 
 ############################################################################################
-# Calculate probability distribution
+# Calculate probability distribution see formula 2.50 (log of left part divided by right part)
 ############################################################################################
-
+#=
 function prob()
     LLR_cn_1 = 0.0
     LLR_cn_sum = 0.0
@@ -191,8 +207,8 @@ function prob()
     p_cn = LLR_cn_1/LLR_cn_sum
     @show p_cn
 end
-prob()
-
+LLR_cn = prob()
+=#
 ############################################################################################
 # Show initial results
 ############################################################################################

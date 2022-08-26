@@ -37,6 +37,7 @@ function box_plus(a::Vector, b::Vector, n)
         result[i] = log(dividend / divisor)
     end
     @show length(result)
+    @show length(result)
     return result
 end
 
@@ -143,7 +144,7 @@ LLR_ext_cn = ones(Float64, n, d_c)#Matrix{Float64}(undef, n, d_c)
 ############################################################################################
 
 # Calculate sample Values for each check node
-function sample(x, n, σ, μ)
+function sample(x, n, σ, μ, n, σ, μ)
     # Calculate step size
     steps = (last(x)-x[1])/n
     x_n = x[1]
@@ -207,7 +208,7 @@ plot(x, y, title = "Plotted LLR_ext_cn")
 savefig("LLR_ext_plot.png")
 
 ############################################################################################
-# Calculate probability distribution see formula 2.50 (log of left part divided by right part)
+# Calculate probability distribution see formula 2.50 (log of left part divided by right part) see formula 2.50 (log of left part divided by right part)
 ############################################################################################
 
 #=
@@ -227,8 +228,8 @@ function prob()
     p_cn = LLR_cn_1/LLR_cn_sum
     @show p_cn
 end
-LLR_cn = prob()
-=#
+LLR_cn = LLR_cn = prob()
+=#=#
 ############################################################################################
 # Show initial results
 ############################################################################################
